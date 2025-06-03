@@ -1,44 +1,46 @@
 import pandas as pd
-import nltk
-from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.cluster import KMeans
-from transformers import pipeline
+from collections import Counter
 
-# Baixar stopwords do português
-nltk.download('stopwords')
-stop_words = stopwords.words('portuguese')
+# Dados variados por cliente
+dados_pedidos = pd.DataFrame([
+    {'cliente_id': 1, 'pedido_id': 101, 'itens': ['sushi', 'chá verde']},
+    {'cliente_id': 1, 'pedido_id': 102, 'itens': ['hamburguer artesanal', 'batata frita']},
+    {'cliente_id': 1, 'pedido_id': 103, 'itens': ['macarrão ao molho branco', 'vinho']},
+    {'cliente_id': 1, 'pedido_id': 104, 'itens': ['temaki', 'refrigerante']},
+    {'cliente_id': 1, 'pedido_id': 105, 'itens': ['pizza calabresa', 'milkshake']},
+    
+    {'cliente_id': 2, 'pedido_id': 201, 'itens': ['hamburguer vegetariano', 'água']},
+    {'cliente_id': 2, 'pedido_id': 202, 'itens': ['sushi', 'suco detox']},
+    {'cliente_id': 2, 'pedido_id': 203, 'itens': ['lasanha', 'chá verde']},
+    {'cliente_id': 2, 'pedido_id': 204, 'itens': ['batata frita', 'hamburguer artesanal']},
+    {'cliente_id': 2, 'pedido_id': 205, 'itens': ['yakisoba', 'refrigerante']},
+    
+    {'cliente_id': 3, 'pedido_id': 301, 'itens': ['quinoa', 'legumes assados']},
+    {'cliente_id': 3, 'pedido_id': 302, 'itens': ['sashimi', 'suco de uva']},
+    {'cliente_id': 3, 'pedido_id': 303, 'itens': ['nhoque', 'vinho']},
+    {'cliente_id': 3, 'pedido_id': 304, 'itens': ['sushi', 'chá verde']},
+    {'cliente_id': 3, 'pedido_id': 305, 'itens': ['hamburguer artesanal', 'batata doce']},
+    
+    {'cliente_id': 4, 'pedido_id': 401, 'itens': ['lasanha', 'suco de uva']},
+    {'cliente_id': 4, 'pedido_id': 402, 'itens': ['sopa de legumes', 'suco detox']},
+    {'cliente_id': 4, 'pedido_id': 403, 'itens': ['sushi', 'hamburguer vegetariano']},
+    {'cliente_id': 4, 'pedido_id': 404, 'itens': ['macarrão ao molho vermelho', 'vinho']},
+    {'cliente_id': 4, 'pedido_id': 405, 'itens': ['pizza calabresa', 'refrigerante']},
+])
 
-# Histórico de pedidos simulados
-dados_clientes = pd.DataFrame({
-    'cliente_id': [1, 2, 3, 4, 5],
-    'historico_pedidos': [
-        "hamburguer artesanal, batata frita, coca-cola",
-        "pizza calabresa, suco de laranja",
-        "hamburguer duplo, batata frita, milkshake",
-        "macarrão ao molho branco, vinho",
-        "sushi, sashimi, chá verde"
-    ]
-})
+# Agrupar e processar
+agrupado = dados_pedidos.groupby('cliente_id')['itens'].sum().reset_index()
 
-# TF-IDF com filtro de palavras comuns em português
-vetorizador = TfidfVectorizer(stop_words=stop_words)
-vetores = vetorizador.fit_transform(dados_clientes['historico_pedidos'])
+def item_mais_comprado(lista_itens):
+    contagem = Counter(lista_itens)
+    return contagem.most_common(1)[0][0]
 
-# Agrupamento (padrões de comportamento)
-kmeans = KMeans(n_clusters=2, random_state=42)
-dados_clientes['grupo'] = kmeans.fit_predict(vetores)
+agrupado['item_mais_comprado'] = agrupado['itens'].apply(item_mais_comprado)
+agrupado['recomendacao_voucher'] = agrupado.apply(
+    lambda row: f"Cliente {row['cliente_id']} comprou mais '{row['item_mais_comprado']}', por isso receberá um voucher promocional para esse item.",
+    axis=1
+)
 
-# LLM - Gerador de texto com GPT-2
-gerador = pipeline("text-generation", model="gpt2")
-
-def gerar_sugestao_voucher(historico):
-    prompt = f"O cliente costuma pedir: {historico}. Qual prato e desconto devemos sugerir?"
-    resultado = gerador(prompt, max_length=50, num_return_sequences=1)[0]['generated_text']
-    return resultado
-
-# Aplicar sugestão a cada cliente
-dados_clientes['sugestao_voucher'] = dados_clientes['historico_pedidos'].apply(gerar_sugestao_voucher)
-
-# Exibir resultado final
-print(dados_clientes[['cliente_id', 'historico_pedidos', 'grupo', 'sugestao_voucher']])
+# Exportar para Excel
+agrupado[['cliente_id', 'item_mais_comprado', 'recomendacao_voucher']].to_excel("vouchers_clientes.xlsx", index=False)
+print("\nArquivo 'vouchers_clientes.xlsx' criado com sucesso!")
